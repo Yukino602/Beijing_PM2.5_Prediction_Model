@@ -21,6 +21,7 @@ Our final model is a single global LightGBM regressor trained across all station
 ```
 models/
   final_global_lgbm_model.joblib
+  global_feature_cols.json
 notebooks/
   01_data_cleaning_train.ipynb        # Missing-value diagnosis + imputation, training data
   02_data_cleaning_test.ipynb         # Same pipeline applied to test data, id-preserving
