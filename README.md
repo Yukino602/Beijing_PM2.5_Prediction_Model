@@ -1,23 +1,23 @@
 # Beijing PM2.5 Next-Hour Forecasting
- 
-**Team:** [FILL IN — team name / member names]
+
+**Team:** [FILL IN — Phoenix / Brandon Tan Tze Siong, Leng Jaek-Hxiang]
 **Competition:** Beijing PM2.5 Forecasting Challenge
 **Submission date:** 6 September 2026
- 
+
 ## Overview
- 
+
 This repository contains our full pipeline for forecasting next-hour PM2.5 concentration
 across 12 Beijing air-quality monitoring stations, using contemporaneous pollutant readings
 (PM10, SO2, NO2, CO, O3) and meteorological data (temperature, pressure, dew point, rain,
 wind speed/direction) — **without** access to the same-hour PM2.5 reading itself, which is
 withheld by design in both the training and test data.
- 
+
 Our final model is a single global LightGBM regressor trained across all stations jointly
 (with station identity as a categorical feature), selected after comparing linear models
 (Linear/Ridge/Lasso/ElasticNet), RandomForest, and per-station vs. global LightGBM variants.
- 
+
 ## Repository Structure
- 
+
 ```
 notebooks/
   01_data_cleaning_train.ipynb        # Missing-value diagnosis + imputation, training data
@@ -27,14 +27,14 @@ notebooks/
 submissions/
   submission_v1.csv                   # Exact file corresponding to our leaderboard submission
 ```
- 
+
 ## Methodology
- 
+
 ### 1. Data Cleaning & Preprocessing
- 
+
 Both training and test data (12 stations each) contained missing values scattered across
 pollutant and weather columns. Our approach:
- 
+
 - **Gap classification**: for each station/variable, missing-value runs were classified by
   duration (`small` < 2h, `medium` < 8h, `long` < 24h).
 - **Method comparison**: we benchmarked linear interpolation, PCHIP interpolation, and an
@@ -47,11 +47,12 @@ pollutant and weather columns. Our approach:
 - **Test data**: the identical cleaning pipeline was applied to the test set independently,
   with the `id` column preserved via a `(station, observation_timestamp)` join back to the
   raw file, since `id` is not part of the imputation feature set.
+
 ### 2. Feature Engineering
- 
+
 All features are derived only from information available at prediction time (no leakage
 from the target or from same-hour PM2.5):
- 
+
 - **Lag features**: 1, 2, 3, 6, 12, 24-hour lags for every pollutant and weather variable.
 - **Rolling statistics**: mean/std/min/max over 3, 6, 12, 24-hour windows, computed on
   `shift(1)` series to avoid leaking the current hour into its own rolling window.
@@ -70,31 +71,32 @@ from the target or from same-hour PM2.5):
     driver of pollution accumulation.
   - `PM10_lag1_x_WSPM` — captures that wind's dispersal effect depends on how much
     particulate matter was already present.
+
 A critical finding during development: `current_PM2_5` (same-hour PM2.5) was initially
 included as a feature and produced an inflated ~0.94 R² through simple autocorrelation.
 Once identified as a form of target leakage — the competition's test data does not provide
 this value — it was removed from the feature set entirely, and all reported results below
 reflect the leak-free version of the pipeline.
- 
+
 ### 3. Validation Strategy
- 
+
 `TimeSeriesSplit` (5 folds) was used throughout, ensuring each fold's test period is
 strictly chronologically after its training period — appropriate for a forecasting task
 where random shuffling would leak future information into training.
- 
+
 ### 4. Models Tested
- 
+
 | Model | Approach | Notes |
 |---|---|---|
 | Linear Regression / Ridge / Lasso / ElasticNet | Per-station, scaled features | Baseline; Lasso/ElasticNet handled collinearity from lag/rolling features better than plain OLS |
 | RandomForest | Per-station | Tested as a nonlinear baseline |
 | LightGBM (per-station) | 12 separate models | Each station trained on ~4,000–8,000 rows |
 | **LightGBM (global) — FINAL** | Single model, all stations combined, `station` as categorical feature | ~360,000 rows total; chosen for materially lower RMSE, since shared atmospheric/chemical relationships across stations are learned from far more data than any single-station model has access to |
- 
+
 ### 5. Final Model
- 
+
 **Model:** Single global LightGBM regressor (`lightgbm.LGBMRegressor`)
- 
+
 **Hyperparameters:**
 ```python
 LGBMRegressor(
@@ -110,31 +112,36 @@ LGBMRegressor(
 )
 ```
 `station` passed as a native categorical feature (`categorical_feature=['station']`).
- 
+
 No ensembling was used in the final submission.
- 
+
 ### 6. Post-Processing
- 
+
 - Predictions clipped at a lower bound of 0 (PM2.5 concentration cannot be physically
   negative; the model can occasionally output small negative values).
 - For test-time inference, each station's test period was prefixed with the tail of its
   training history so that lag/rolling-window features have sufficient look-back at the
   start of the test period.
+
 ### 7. Results
- 
+
 | Fold | R² | RMSE |
 |---|---|---|
-| 0 | [FILL IN] | [FILL IN] |
-| 1 | [FILL IN] | [FILL IN] |
-| 2 | [FILL IN] | [FILL IN] |
-| 3 | [FILL IN] | [FILL IN] |
-| 4 | [FILL IN] | [FILL IN] |
-| **Mean** | **[FILL IN]** | **[FILL IN]** |
- 
-**Leaderboard score:** [FILL IN]
- 
+| 0 | 0.8476 | 35.736 |
+| 1 | 0.8993 | 22.296 |
+| 2 | 0.8877 | 24.512 |
+| 3 | 0.9134 | 27.268 |
+| 4 | 0.8540 | 23.650 |
+| **Mean** | **0.8804** | **26.692** |
+
+**Leaderboard score (public, 30% split):** 25.839
+
+Local CV mean RMSE (26.69) and leaderboard RMSE (25.84) are closely aligned, indicating
+the time-series validation strategy generalizes well and the model is not overfit to the
+validation folds.
+
 ### 8. Limitations
- 
+
 - The removal of same-hour PM2.5 (`current_PM2_5`) meaningfully increases task difficulty
   relative to a naive persistence-style approach; our reported metrics reflect this
   harder, leak-free formulation rather than an inflated same-hour-autocorrelation result.
@@ -147,11 +154,18 @@ No ensembling was used in the final submission.
 - Test-set imputation quality (interpolation/LGBM-based) is a modeling choice, not ground
   truth — any systematic imputation error propagates into the lag/rolling features used
   for prediction.
+- During test inference, a small number of rows per station (37–237 out of ~4,200–4,300,
+  i.e. under 6% per station) had residual NaN values in engineered lag/rolling features
+  after the train-history lookback join, and were filled with 0 rather than dropped, to
+  ensure every required `id` in the submission file received a prediction. Shunyi (237)
+  and Huairou (124) had the highest counts, most other stations had 37–94.
+
 ## Reproduction Instructions
- 
+
 **Required files:**
 - Raw competition data: `train.csv`, `test.csv` (not included in this repo; obtain from
   the competition data source)
+
 **Execution order:**
 1. `01_data_cleaning_train.ipynb` — produces `imputed_data/{station}.csv` for each of the
    12 stations from the raw training data.
@@ -161,6 +175,7 @@ No ensembling was used in the final submission.
    engineered features, trains the global LightGBM model with 5-fold time-series
    validation, then generates predictions on `test_cleaned.csv` and writes the final
    `submission_v1.csv`.
+
 **Key dependencies:**
 ```
 pandas
@@ -172,15 +187,15 @@ seaborn
 joblib
 ```
 (see `requirements.txt`)
- 
+
 **Random seed:** `random_state=42` used consistently across all model instantiations for
 reproducibility.
- 
+
 **Script generating the final submission file:** `03_training_and_prediction.ipynb`
 (final cell, writes to `submission_v1.csv`).
- 
+
 ## Disclosure
- 
+
 - **External datasets:** None beyond the competition-provided training and test files.
 - **External code / repositories consulted:** None directly copied; standard library
   usage (pandas, scikit-learn, LightGBM) per their public documentation.
