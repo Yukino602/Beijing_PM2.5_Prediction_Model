@@ -1,6 +1,6 @@
 # Beijing PM2.5 Next-Hour Forecasting
 
-**Team:** [FILL IN — Phoenix / Brandon Tan Tze Siong, Leng Jaek-Hxiang]
+**Team:** [Phoenix / Brandon Tan Tze Siong, Leng Jaek-Hxiang]
 **Competition:** Beijing PM2.5 Forecasting Challenge
 **Submission date:** 6 September 2026
 
@@ -19,6 +19,8 @@ Our final model is a single global LightGBM regressor trained across all station
 ## Repository Structure
 
 ```
+models/
+  final_global_lgbm_model.joblib
 notebooks/
   01_data_cleaning_train.ipynb        # Missing-value diagnosis + imputation, training data
   02_data_cleaning_test.ipynb         # Same pipeline applied to test data, id-preserving
@@ -26,6 +28,8 @@ notebooks/
                                        # test inference, submission file generation
 submissions/
   submission_v1.csv                   # Exact file corresponding to our leaderboard submission
+README.md                             
+requirements.txt 
 ```
 
 ## Methodology
